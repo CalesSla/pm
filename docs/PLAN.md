@@ -175,17 +175,17 @@ Connect the backend to OpenRouter for AI calls.
 
 Extend the AI integration to understand the Kanban board and return structured updates.
 
-- [ ] Define a structured output schema for AI responses:
+- [x] Define a structured output schema for AI responses:
   - `message`: text response to the user
   - `actions`: optional list of operations (create_card, update_card, delete_card, move_card)
   - Each action includes the necessary parameters (column_id, card data, target position, etc.)
-- [ ] Create `/api/ai/chat` endpoint accepting `{"message", "history"}`
-- [ ] System prompt includes the current board state as JSON
-- [ ] Parse the structured response and apply any actions to the database
-- [ ] Return the AI message and the updated board state to the frontend
-- [ ] Support multiple operations in a single AI response
-- [ ] Write pytest tests with mocked AI responses to verify action parsing and application
-- [ ] Test edge cases: no actions, invalid actions, multiple actions
+- [x] Create `/api/ai/chat` endpoint accepting `{"message", "history"}`
+- [x] System prompt includes the current board state as JSON
+- [x] Parse the structured response and apply any actions to the database
+- [x] Return the AI message and the updated board state to the frontend
+- [x] Support multiple operations in a single AI response
+- [x] Write pytest tests with mocked AI responses to verify action parsing and application
+- [x] Test edge cases: no actions, invalid actions, multiple actions
 
 **Success criteria:**
 - AI receives the full board context with each message
