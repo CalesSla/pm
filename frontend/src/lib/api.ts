@@ -75,3 +75,26 @@ export async function reorderCard(
     }),
   });
 }
+
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type ChatResponse = {
+  message: string;
+  actions: unknown[];
+  action_results: unknown[];
+  board: BoardData;
+};
+
+export async function sendChatMessage(
+  message: string,
+  history: ChatMessage[]
+): Promise<ChatResponse> {
+  const res = await request("/api/ai/chat", {
+    method: "POST",
+    body: JSON.stringify({ message, history }),
+  });
+  return res.json();
+}

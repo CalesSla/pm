@@ -200,16 +200,16 @@ Extend the AI integration to understand the Kanban board and return structured u
 
 Add a chat sidebar to the UI for AI interaction, with live Kanban updates.
 
-- [ ] Create `ChatSidebar` component with:
+- [x] Create `ChatSidebar` component with:
   - Toggle button to open/close
   - Message history display (user + AI messages)
   - Text input with send button
   - Loading indicator during AI response
-- [ ] Style the sidebar matching the app color scheme
-- [ ] Connect to `/api/ai/chat` endpoint
-- [ ] After receiving AI response, if actions were applied, refresh the board state
-- [ ] Maintain conversation history in component state
-- [ ] Add frontend unit tests for ChatSidebar component
+- [x] Style the sidebar matching the app color scheme
+- [x] Connect to `/api/ai/chat` endpoint
+- [x] After receiving AI response, if actions were applied, refresh the board state
+- [x] Maintain conversation history in component state
+- [x] Add frontend unit tests for ChatSidebar component
 - [ ] Add E2E test: open chat, ask AI to create a card, verify card appears on board
 
 **Success criteria:**
