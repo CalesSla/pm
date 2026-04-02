@@ -1,1 +1,1 @@
-This folder will contain start and stop scripts for Mac, PC and Linux
+Start and stop scripts for the Docker container. Shell scripts for Mac/Linux, batch files for Windows.

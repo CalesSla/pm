@@ -1,1 +1,1 @@
-This file should be updated with a description of the Backend
+Python FastAPI backend. Uses uv for package management. Entry point: app/main.py. API routes in app/api/.
