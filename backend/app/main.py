@@ -1,4 +1,6 @@
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -6,8 +8,16 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api import router as api_router
+from app.db import init_db
 
-app = FastAPI(title="PM App")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    init_db()
+    yield
+
+
+app = FastAPI(title="PM App", lifespan=lifespan)
 app.include_router(api_router)
 
 STATIC_DIR = Path(os.environ.get("STATIC_DIR", "static"))

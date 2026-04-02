@@ -24,5 +24,10 @@ export default function Home() {
     setAuthed(false);
   }
 
-  return <KanbanBoard onLogout={handleLogout} />;
+  return (
+    <KanbanBoard
+      onLogout={handleLogout}
+      onAuthError={() => setAuthed(false)}
+    />
+  );
 }

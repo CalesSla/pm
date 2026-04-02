@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -15,7 +15,15 @@ import {
 } from "@dnd-kit/core";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
-import { createId, initialData, moveCard, type BoardData } from "@/lib/kanban";
+import { moveCard, type BoardData } from "@/lib/kanban";
+import {
+  AuthError,
+  fetchBoard,
+  renameColumn as apiRenameColumn,
+  createCard as apiCreateCard,
+  deleteCard as apiDeleteCard,
+  reorderCard as apiReorderCard,
+} from "@/lib/api";
 
 const columnFirst: CollisionDetection = (args) => {
   const pointerHits = pointerWithin(args);
@@ -23,9 +31,25 @@ const columnFirst: CollisionDetection = (args) => {
   return closestCorners(args);
 };
 
-export const KanbanBoard = ({ onLogout }: { onLogout?: () => void }) => {
-  const [board, setBoard] = useState<BoardData>(() => initialData);
+type Props = {
+  onLogout?: () => void;
+  onAuthError?: () => void;
+};
+
+export const KanbanBoard = ({ onLogout, onAuthError }: Props) => {
+  const [board, setBoard] = useState<BoardData | null>(null);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+
+  const handleApiError = useCallback(
+    (err: unknown) => {
+      if (err instanceof AuthError) onAuthError?.();
+    },
+    [onAuthError]
+  );
+
+  useEffect(() => {
+    fetchBoard().then(setBoard).catch(handleApiError);
+  }, [handleApiError]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -33,7 +57,7 @@ export const KanbanBoard = ({ onLogout }: { onLogout?: () => void }) => {
     })
   );
 
-  const cardsById = useMemo(() => board.cards, [board.cards]);
+  const cardsById = useMemo(() => board?.cards ?? {}, [board?.cards]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveCardId(event.active.id as string);
@@ -43,43 +67,67 @@ export const KanbanBoard = ({ onLogout }: { onLogout?: () => void }) => {
     const { active, over } = event;
     setActiveCardId(null);
 
-    if (!over || active.id === over.id) {
-      return;
-    }
+    if (!board || !over || active.id === over.id) return;
 
-    setBoard((prev) => ({
-      ...prev,
-      columns: moveCard(prev.columns, active.id as string, over.id as string),
-    }));
+    const newColumns = moveCard(
+      board.columns,
+      active.id as string,
+      over.id as string
+    );
+    setBoard({ ...board, columns: newColumns });
+
+    // Find where the card landed
+    const cardId = active.id as string;
+    for (const col of newColumns) {
+      const pos = col.cardIds.indexOf(cardId);
+      if (pos !== -1) {
+        apiReorderCard(cardId, col.id, pos).catch(handleApiError);
+        break;
+      }
+    }
   };
 
   const handleRenameColumn = (columnId: string, title: string) => {
-    setBoard((prev) => ({
-      ...prev,
-      columns: prev.columns.map((column) =>
+    if (!board) return;
+    setBoard({
+      ...board,
+      columns: board.columns.map((column) =>
         column.id === columnId ? { ...column, title } : column
       ),
-    }));
+    });
+    apiRenameColumn(columnId, title).catch(handleApiError);
   };
 
-  const handleAddCard = (columnId: string, title: string, details: string) => {
-    const id = createId("card");
-    setBoard((prev) => ({
-      ...prev,
-      cards: {
-        ...prev.cards,
-        [id]: { id, title, details: details || "No details yet." },
-      },
-      columns: prev.columns.map((column) =>
-        column.id === columnId
-          ? { ...column, cardIds: [...column.cardIds, id] }
-          : column
-      ),
-    }));
+  const handleAddCard = async (
+    columnId: string,
+    title: string,
+    details: string
+  ) => {
+    try {
+      const card = await apiCreateCard(columnId, title, details || "");
+      setBoard((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          cards: {
+            ...prev.cards,
+            [card.id]: card,
+          },
+          columns: prev.columns.map((column) =>
+            column.id === columnId
+              ? { ...column, cardIds: [...column.cardIds, card.id] }
+              : column
+          ),
+        };
+      });
+    } catch (err) {
+      handleApiError(err);
+    }
   };
 
-  const handleDeleteCard = (columnId: string, cardId: string) => {
+  const handleDeleteCard = async (columnId: string, cardId: string) => {
     setBoard((prev) => {
+      if (!prev) return prev;
       return {
         ...prev,
         cards: Object.fromEntries(
@@ -87,15 +135,19 @@ export const KanbanBoard = ({ onLogout }: { onLogout?: () => void }) => {
         ),
         columns: prev.columns.map((column) =>
           column.id === columnId
-            ? {
-                ...column,
-                cardIds: column.cardIds.filter((id) => id !== cardId),
-              }
+            ? { ...column, cardIds: column.cardIds.filter((id) => id !== cardId) }
             : column
         ),
       };
     });
+    try {
+      await apiDeleteCard(cardId);
+    } catch (err) {
+      handleApiError(err);
+    }
   };
+
+  if (!board) return null;
 
   const activeCard = activeCardId ? cardsById[activeCardId] : null;
 

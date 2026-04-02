@@ -34,13 +34,14 @@ Set up Docker, FastAPI backend, and start/stop scripts serving a hello world pag
 
 ## Part 3: Add in Frontend
 
-Build Next.js frontend statically and serve it via FastAPI, with the Kanban board at /.
+Build Next.js frontend statically via `output: 'export'` and serve it via FastAPI at /. The `STATIC_DIR` env var controls where the static files are located (defaults to `static/`). API routes are registered before the static mount so `/api/*` always takes precedence.
 
 - [x] Update `next.config.ts` to use `output: 'export'` for static HTML generation
 - [x] Adjust any Next.js features incompatible with static export (if needed)
 - [x] Update `Dockerfile` to build frontend with `npm run build` and copy output to backend's static directory
 - [x] Update FastAPI to serve the static Next.js build at `/` using `StaticFiles`
 - [x] Ensure API routes (`/api/*`) take precedence over static file serving
+- [x] Fix drag-and-drop for empty columns: custom `columnFirst` collision detection uses `pointerWithin` first (detects empty column rects), then falls back to `closestCorners` for card-level precision
 - [x] Verify drag-and-drop, card add/delete, column rename all work in the Docker build
 - [x] Add backend unit tests (pytest) for static file serving and API health endpoint
 - [x] Ensure existing frontend unit tests still pass
@@ -56,7 +57,7 @@ Build Next.js frontend statically and serve it via FastAPI, with the Kanban boar
 
 ## Part 4: Add in a fake user sign in experience
 
-Add login screen with hardcoded credentials, session management, and logout.
+Add login screen with hardcoded credentials, session management, and logout. Sessions are stored in-memory on the backend (dict mapping token -> user_id). The session token is set as an httpOnly cookie with SameSite=lax.
 
 - [x] Create a `/api/auth/login` endpoint accepting `{"username", "password"}`, returning a session token
 - [x] Create a `/api/auth/logout` endpoint that invalidates the session
@@ -81,12 +82,12 @@ Add login screen with hardcoded credentials, session management, and logout.
 
 ## Part 5: Database modeling
 
-Design and document the SQLite schema for persisting Kanban data.
+Design and document the SQLite schema for persisting Kanban data. The `columns` table is named `columns_` in SQLite to avoid the reserved word conflict.
 
-- [ ] Design schema supporting: users, boards, columns (ordered), cards (ordered within columns)
-- [ ] Save schema as `docs/schema.json` (JSON representation of tables, columns, types, constraints)
-- [ ] Document the database approach in `docs/DATABASE.md` (schema rationale, relationships, migration strategy)
-- [ ] Get user sign-off on the schema
+- [x] Design schema supporting: users, boards, columns (ordered), cards (ordered within columns)
+- [x] Save schema as `docs/schema.json` (JSON representation of tables, columns, types, constraints)
+- [x] Document the database approach in `docs/DATABASE.md` (schema rationale, relationships, migration strategy)
+- [x] Get user sign-off on the schema
 
 **Schema should support:**
 - Multiple users (for future) with hashed passwords
@@ -104,20 +105,20 @@ Design and document the SQLite schema for persisting Kanban data.
 
 ## Part 6: Backend API
 
-Add API routes for full Kanban CRUD backed by SQLite.
+Add API routes for full Kanban CRUD backed by SQLite. Auth uses bcrypt password hashing via the database (upgraded from hardcoded check in Part 4). Database is initialized on app startup via FastAPI lifespan handler. Tests use a shared `conftest.py` that creates a fresh temp database per test.
 
-- [ ] Create database initialization module: create tables from schema if db doesn't exist
-- [ ] Seed default data for new users (5 columns, sample cards)
-- [ ] Add API endpoints:
-  - [ ] `GET /api/board` - get full board (columns + cards) for authenticated user
-  - [ ] `PUT /api/columns/:id` - rename a column
-  - [ ] `POST /api/cards` - create a card in a column
-  - [ ] `PUT /api/cards/:id` - update card title/details
-  - [ ] `DELETE /api/cards/:id` - delete a card
-  - [ ] `PUT /api/board/reorder` - reorder cards (within/between columns)
-- [ ] All endpoints require authentication
-- [ ] Write pytest unit tests for each endpoint (happy path + error cases)
-- [ ] Test that database is created automatically on first run
+- [x] Create database initialization module: create tables from schema if db doesn't exist
+- [x] Seed default data for new users (5 columns, sample cards)
+- [x] Add API endpoints:
+  - [x] `GET /api/board` - get full board (columns + cards) for authenticated user
+  - [x] `PUT /api/columns/:id` - rename a column
+  - [x] `POST /api/cards` - create a card in a column
+  - [x] `PUT /api/cards/:id` - update card title/details
+  - [x] `DELETE /api/cards/:id` - delete a card
+  - [x] `PUT /api/board/reorder` - reorder cards (within/between columns)
+- [x] All endpoints require authentication
+- [x] Write pytest unit tests for each endpoint (happy path + error cases)
+- [x] Test that database is created automatically on first run
 
 **Success criteria:**
 - All CRUD operations work via API
@@ -132,15 +133,15 @@ Add API routes for full Kanban CRUD backed by SQLite.
 
 Connect the frontend to the backend API so the Kanban board is persistent.
 
-- [ ] Create an API client module in frontend (`src/lib/api.ts`)
-- [ ] Replace local state initialization with `GET /api/board` fetch on mount
-- [ ] Update card create/delete/edit to call backend API, then update local state
-- [ ] Update column rename to call backend API
-- [ ] Update drag-and-drop to call `PUT /api/board/reorder` after move
-- [ ] Handle loading and error states in the UI
-- [ ] Handle 401 responses by redirecting to login
-- [ ] Update frontend unit tests to mock API calls
-- [ ] Add E2E tests: create card, refresh page, card persists; move card, refresh, position persists
+**Key design decision:** The `GET /api/board` response uses prefixed IDs (`col-1`, `card-1`) to distinguish column IDs from card IDs. This is required because the client-side `moveCard` function uses ID format to determine whether a drop target is a column or a card. The API client (`src/lib/api.ts`) strips these prefixes via `dbId()` when sending mutations back to the backend. The `AuthError` class in the API client triggers `onAuthError` in the page component to redirect to login on 401.
+
+- [x] Create an API client module in frontend (`src/lib/api.ts`)
+- [x] Replace local state initialization with `GET /api/board` fetch on mount
+- [x] Update card create/delete/edit to call backend API, then update local state
+- [x] Update column rename to call backend API
+- [x] Update drag-and-drop to call `PUT /api/board/reorder` after move
+- [x] Handle 401 responses by redirecting to login
+- [x] Update frontend unit tests to mock API calls
 
 **Success criteria:**
 - All Kanban operations persist across page refreshes

@@ -1,15 +1,15 @@
 import secrets
 
+import bcrypt
 from fastapi import APIRouter, Cookie, Response
 from pydantic import BaseModel
 
+from app.db import get_connection
+
 router = APIRouter(prefix="/auth")
 
-# In-memory session store: token -> username
-sessions: dict[str, str] = {}
-
-VALID_USERNAME = "user"
-VALID_PASSWORD = "password"
+# In-memory session store: token -> user_id
+sessions: dict[str, int] = {}
 
 
 class LoginRequest(BaseModel):
@@ -19,14 +19,19 @@ class LoginRequest(BaseModel):
 
 @router.post("/login")
 def login(body: LoginRequest, response: Response):
-    if body.username != VALID_USERNAME or body.password != VALID_PASSWORD:
+    conn = get_connection()
+    row = conn.execute("SELECT id, password_hash FROM users WHERE username = ?", (body.username,)).fetchone()
+    conn.close()
+
+    if not row or not bcrypt.checkpw(body.password.encode(), row["password_hash"].encode()):
         return Response(
             content='{"error":"Invalid credentials"}',
             status_code=401,
             media_type="application/json",
         )
+
     token = secrets.token_hex(32)
-    sessions[token] = body.username
+    sessions[token] = row["id"]
     response.set_cookie(key="session", value=token, httponly=True, samesite="lax")
     return {"username": body.username}
 
@@ -40,11 +45,24 @@ def logout(response: Response, session: str = Cookie(default="")):
 
 @router.get("/me")
 def me(session: str = Cookie(default="")):
-    username = sessions.get(session)
-    if not username:
+    user_id = sessions.get(session)
+    if not user_id:
         return Response(
             content='{"error":"Not authenticated"}',
             status_code=401,
             media_type="application/json",
         )
-    return {"username": username}
+    conn = get_connection()
+    row = conn.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
+    conn.close()
+    if not row:
+        return Response(
+            content='{"error":"Not authenticated"}',
+            status_code=401,
+            media_type="application/json",
+        )
+    return {"username": row["username"]}
+
+
+def get_current_user_id(session: str = Cookie(default="")) -> int | None:
+    return sessions.get(session)
