@@ -10,6 +10,31 @@ def test_get_board_unauthenticated(client):
     assert resp.status_code == 401
 
 
+def test_rename_column_unauthenticated(client):
+    resp = client.put("/api/columns/1", json={"title": "Hacked"})
+    assert resp.status_code == 401
+
+
+def test_create_card_unauthenticated(client):
+    resp = client.post("/api/cards", json={"column_id": 1, "title": "Hacked"})
+    assert resp.status_code == 401
+
+
+def test_update_card_unauthenticated(client):
+    resp = client.put("/api/cards/1", json={"title": "Hacked"})
+    assert resp.status_code == 401
+
+
+def test_delete_card_unauthenticated(client):
+    resp = client.delete("/api/cards/1")
+    assert resp.status_code == 401
+
+
+def test_reorder_unauthenticated(client):
+    resp = client.put("/api/board/reorder", json={"card_id": 1, "target_column_id": 2, "target_position": 0})
+    assert resp.status_code == 401
+
+
 def test_get_board_returns_seeded_data(authed_client):
     resp = authed_client.get("/api/board")
     assert resp.status_code == 200

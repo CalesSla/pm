@@ -25,3 +25,16 @@ def test_logout(authed_client):
     authed_client.post("/api/auth/logout")
     resp = authed_client.get("/api/auth/me")
     assert resp.status_code == 401
+
+
+def test_session_expires(authed_client, monkeypatch):
+    import time as time_mod
+    from app.api import auth
+    # Verify session works
+    resp = authed_client.get("/api/auth/me")
+    assert resp.status_code == 200
+    # Fast-forward time past TTL
+    future = time_mod.time() + auth.SESSION_TTL + 1
+    monkeypatch.setattr(time_mod, "time", lambda: future)
+    resp = authed_client.get("/api/auth/me")
+    assert resp.status_code == 401

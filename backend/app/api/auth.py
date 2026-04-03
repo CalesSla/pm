@@ -1,15 +1,18 @@
 import secrets
+import time
 
 import bcrypt
 from fastapi import APIRouter, Cookie, Response
 from pydantic import BaseModel
 
-from app.db import get_connection
+from app.db import get_db
 
 router = APIRouter(prefix="/auth")
 
-# In-memory session store: token -> user_id
-sessions: dict[str, int] = {}
+SESSION_TTL = 24 * 60 * 60  # 24 hours in seconds
+
+# In-memory session store: token -> (user_id, created_at)
+sessions: dict[str, tuple[int, float]] = {}
 
 
 class LoginRequest(BaseModel):
@@ -19,9 +22,8 @@ class LoginRequest(BaseModel):
 
 @router.post("/login")
 def login(body: LoginRequest, response: Response):
-    conn = get_connection()
-    row = conn.execute("SELECT id, password_hash FROM users WHERE username = ?", (body.username,)).fetchone()
-    conn.close()
+    with get_db() as conn:
+        row = conn.execute("SELECT id, password_hash FROM users WHERE username = ?", (body.username,)).fetchone()
 
     if not row or not bcrypt.checkpw(body.password.encode(), row["password_hash"].encode()):
         return Response(
@@ -31,7 +33,7 @@ def login(body: LoginRequest, response: Response):
         )
 
     token = secrets.token_hex(32)
-    sessions[token] = row["id"]
+    sessions[token] = (row["id"], time.time())
     response.set_cookie(key="session", value=token, httponly=True, samesite="lax")
     return {"username": body.username}
 
@@ -45,16 +47,15 @@ def logout(response: Response, session: str = Cookie(default="")):
 
 @router.get("/me")
 def me(session: str = Cookie(default="")):
-    user_id = sessions.get(session)
+    user_id = get_current_user_id(session)
     if not user_id:
         return Response(
             content='{"error":"Not authenticated"}',
             status_code=401,
             media_type="application/json",
         )
-    conn = get_connection()
-    row = conn.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
-    conn.close()
+    with get_db() as conn:
+        row = conn.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
     if not row:
         return Response(
             content='{"error":"Not authenticated"}',
@@ -65,4 +66,22 @@ def me(session: str = Cookie(default="")):
 
 
 def get_current_user_id(session: str = Cookie(default="")) -> int | None:
-    return sessions.get(session)
+    entry = sessions.get(session)
+    if not entry:
+        return None
+    user_id, created_at = entry
+    if time.time() - created_at > SESSION_TTL:
+        sessions.pop(session, None)
+        return None
+    return user_id
+
+
+def require_auth(session: str) -> tuple[int, Response | None]:
+    user_id = get_current_user_id(session)
+    if not user_id:
+        return 0, Response(
+            content='{"error":"Not authenticated"}',
+            status_code=401,
+            media_type="application/json",
+        )
+    return user_id, None

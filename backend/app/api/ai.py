@@ -5,48 +5,36 @@ from pydantic import BaseModel
 
 from app.ai.actions import apply_actions
 from app.ai.client import ACTIONS_SCHEMA, MODEL, get_ai_client
-from app.api.auth import get_current_user_id
+from app.api.auth import require_auth
 from app.api.board import _get_board_id, get_board
-from app.db import get_connection
+from app.db import get_db
 
 router = APIRouter(prefix="/ai")
 
 
-def _require_auth(session: str) -> tuple[int, Response | None]:
-    user_id = get_current_user_id(session)
-    if not user_id:
-        return 0, Response(
-            content='{"error":"Not authenticated"}',
-            status_code=401,
-            media_type="application/json",
-        )
-    return user_id, None
-
-
 def _get_board_state(board_id: int) -> dict:
     """Get the board state as a plain dict for the AI system prompt."""
-    conn = get_connection()
-    columns = conn.execute(
-        "SELECT id, title, position FROM columns_ WHERE board_id = ? ORDER BY position",
-        (board_id,),
-    ).fetchall()
-
-    result = []
-    for col in columns:
-        cards = conn.execute(
-            "SELECT id, title, details, position FROM cards WHERE column_id = ? ORDER BY position",
-            (col["id"],),
+    with get_db() as conn:
+        columns = conn.execute(
+            "SELECT id, title, position FROM columns_ WHERE board_id = ? ORDER BY position",
+            (board_id,),
         ).fetchall()
-        result.append({
-            "column_id": col["id"],
-            "title": col["title"],
-            "position": col["position"],
-            "cards": [
-                {"card_id": c["id"], "title": c["title"], "details": c["details"], "position": c["position"]}
-                for c in cards
-            ],
-        })
-    conn.close()
+
+        result = []
+        for col in columns:
+            cards = conn.execute(
+                "SELECT id, title, details, position FROM cards WHERE column_id = ? ORDER BY position",
+                (col["id"],),
+            ).fetchall()
+            result.append({
+                "column_id": col["id"],
+                "title": col["title"],
+                "position": col["position"],
+                "cards": [
+                    {"card_id": c["id"], "title": c["title"], "details": c["details"], "position": c["position"]}
+                    for c in cards
+                ],
+            })
     return {"columns": result}
 
 
@@ -70,7 +58,7 @@ Use the actual database IDs (integers) from the board state above for column_id 
 
 @router.get("/test")
 def ai_test(session: str = Cookie(default="")):
-    _, err = _require_auth(session)
+    _, err = require_auth(session)
     if err:
         return err
 
@@ -94,7 +82,7 @@ class ChatRequest(BaseModel):
 
 @router.post("/chat")
 def ai_chat(body: ChatRequest, session: str = Cookie(default="")):
-    user_id, err = _require_auth(session)
+    user_id, err = require_auth(session)
     if err:
         return err
 
@@ -115,14 +103,32 @@ def ai_chat(body: ChatRequest, session: str = Cookie(default="")):
     messages.append({"role": "user", "content": body.message})
 
     client = get_ai_client()
-    response = client.chat.completions.create(
-        model=MODEL,
-        messages=messages,
-        response_format=ACTIONS_SCHEMA,
-    )
-
-    raw = response.choices[0].message.content
-    parsed = json.loads(raw)
+    try:
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+            response_format=ACTIONS_SCHEMA,
+        )
+        if not response.choices:
+            return Response(
+                content='{"error":"AI returned no response"}',
+                status_code=502,
+                media_type="application/json",
+            )
+        raw = response.choices[0].message.content
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return Response(
+            content='{"error":"AI returned invalid response format"}',
+            status_code=502,
+            media_type="application/json",
+        )
+    except Exception:
+        return Response(
+            content='{"error":"Failed to get AI response"}',
+            status_code=502,
+            media_type="application/json",
+        )
 
     ai_message = parsed.get("message", "")
     actions = parsed.get("actions", [])

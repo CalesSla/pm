@@ -1,5 +1,6 @@
 import os
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 
 import bcrypt
@@ -63,44 +64,50 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
-def init_db():
+@contextmanager
+def get_db():
     conn = get_connection()
-    conn.executescript(SCHEMA_SQL)
+    try:
+        yield conn
+    finally:
+        conn.close()
 
-    # Seed default user if not exists
-    existing = conn.execute("SELECT id FROM users WHERE username = ?", ("user",)).fetchone()
-    if not existing:
-        pw_hash = bcrypt.hashpw(b"password", bcrypt.gensalt()).decode()
-        conn.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", ("user", pw_hash))
-        conn.commit()
 
-        user_id = conn.execute("SELECT id FROM users WHERE username = ?", ("user",)).fetchone()["id"]
-        conn.execute("INSERT INTO boards (user_id, title) VALUES (?, ?)", (user_id, "My Board"))
-        conn.commit()
+def init_db():
+    with get_db() as conn:
+        conn.executescript(SCHEMA_SQL)
 
-        board_id = conn.execute("SELECT id FROM boards WHERE user_id = ?", (user_id,)).fetchone()["id"]
-        column_ids = []
-        for pos, title in enumerate(DEFAULT_COLUMNS):
-            conn.execute(
-                "INSERT INTO columns_ (board_id, title, position) VALUES (?, ?, ?)",
-                (board_id, title, pos),
-            )
+        existing = conn.execute("SELECT id FROM users WHERE username = ?", ("user",)).fetchone()
+        if not existing:
+            pw_hash = bcrypt.hashpw(b"password", bcrypt.gensalt()).decode()
+            conn.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", ("user", pw_hash))
             conn.commit()
-            col_id = conn.execute(
-                "SELECT id FROM columns_ WHERE board_id = ? AND position = ?",
-                (board_id, pos),
-            ).fetchone()["id"]
-            column_ids.append(col_id)
 
-        for col_idx, title, details in SEED_CARDS:
-            card_pos = conn.execute(
-                "SELECT COUNT(*) as cnt FROM cards WHERE column_id = ?",
-                (column_ids[col_idx],),
-            ).fetchone()["cnt"]
-            conn.execute(
-                "INSERT INTO cards (column_id, title, details, position) VALUES (?, ?, ?, ?)",
-                (column_ids[col_idx], title, details, card_pos),
-            )
-        conn.commit()
+            user_id = conn.execute("SELECT id FROM users WHERE username = ?", ("user",)).fetchone()["id"]
+            conn.execute("INSERT INTO boards (user_id, title) VALUES (?, ?)", (user_id, "My Board"))
+            conn.commit()
 
-    conn.close()
+            board_id = conn.execute("SELECT id FROM boards WHERE user_id = ?", (user_id,)).fetchone()["id"]
+            column_ids = []
+            for pos, title in enumerate(DEFAULT_COLUMNS):
+                conn.execute(
+                    "INSERT INTO columns_ (board_id, title, position) VALUES (?, ?, ?)",
+                    (board_id, title, pos),
+                )
+                conn.commit()
+                col_id = conn.execute(
+                    "SELECT id FROM columns_ WHERE board_id = ? AND position = ?",
+                    (board_id, pos),
+                ).fetchone()["id"]
+                column_ids.append(col_id)
+
+            for col_idx, title, details in SEED_CARDS:
+                card_pos = conn.execute(
+                    "SELECT COUNT(*) as cnt FROM cards WHERE column_id = ?",
+                    (column_ids[col_idx],),
+                ).fetchone()["cnt"]
+                conn.execute(
+                    "INSERT INTO cards (column_id, title, details, position) VALUES (?, ?, ?, ?)",
+                    (column_ids[col_idx], title, details, card_pos),
+                )
+            conn.commit()

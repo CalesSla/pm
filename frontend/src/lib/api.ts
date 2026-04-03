@@ -1,5 +1,14 @@
 import type { BoardData } from "./kanban";
 
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
 async function request(url: string, options?: RequestInit) {
   const res = await fetch(url, {
     ...options,
@@ -7,6 +16,10 @@ async function request(url: string, options?: RequestInit) {
   });
   if (res.status === 401) {
     throw new AuthError();
+  }
+  if (!res.ok) {
+    const body = await res.text();
+    throw new ApiError(res.status, body || `Request failed: ${res.status}`);
   }
   return res;
 }
