@@ -77,3 +77,9 @@ uv run uvicorn app.main:app --reload   # Dev server on port 8000
 - **docs/DATABASE.md** - Schema rationale and relationships
 - **docs/schema.json** - SQLite schema definition
 - **AGENTS.md** - Business requirements and technical decisions (source of truth for product scope)
+
+
+
+## DETAILED PLAN
+
+@docs/PLAN.md
