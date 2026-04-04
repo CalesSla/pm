@@ -11,6 +11,8 @@ type KanbanColumnProps = {
   onRename: (columnId: string, title: string) => void;
   onAddCard: (columnId: string, title: string, details: string) => void;
   onDeleteCard: (columnId: string, cardId: string) => void;
+  onEditCard: (card: Card) => void;
+  onDeleteColumn?: (columnId: string) => void;
 };
 
 export const KanbanColumn = ({
@@ -19,6 +21,8 @@ export const KanbanColumn = ({
   onRename,
   onAddCard,
   onDeleteCard,
+  onEditCard,
+  onDeleteColumn,
 }: KanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
@@ -38,6 +42,15 @@ export const KanbanColumn = ({
             <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
               {cards.length} cards
             </span>
+            {onDeleteColumn && (
+              <button
+                onClick={() => onDeleteColumn(column.id)}
+                className="ml-auto rounded-lg border border-transparent px-2 py-0.5 text-[10px] font-semibold text-[var(--gray-text)] transition hover:border-[var(--stroke)] hover:text-red-500"
+                aria-label={`Delete column ${column.title}`}
+              >
+                Remove
+              </button>
+            )}
           </div>
           <input
             value={column.title}
@@ -54,6 +67,7 @@ export const KanbanColumn = ({
               key={card.id}
               card={card}
               onDelete={(cardId) => onDeleteCard(column.id, cardId)}
+              onEdit={onEditCard}
             />
           ))}
         </SortableContext>

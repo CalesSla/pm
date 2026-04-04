@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from app.ai.actions import apply_actions
 from app.ai.client import ACTIONS_SCHEMA, MODEL, get_ai_client
 from app.api.auth import require_auth
-from app.api.board import _get_board_id, get_board
+from app.api.board import _get_board_id, get_default_board
 from app.db import get_db
 
 router = APIRouter(prefix="/ai")
@@ -97,10 +97,11 @@ def ai_chat(body: ChatRequest, session: str = Cookie(default="")):
     board_state = _get_board_state(board_id)
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(board_state=json.dumps(board_state, indent=2))
 
-    messages = [{"role": "system", "content": system_prompt}]
-    for msg in body.history:
-        messages.append({"role": msg.role, "content": msg.content})
-    messages.append({"role": "user", "content": body.message})
+    messages = [
+        {"role": "system", "content": system_prompt},
+        *[{"role": msg.role, "content": msg.content} for msg in body.history],
+        {"role": "user", "content": body.message},
+    ]
 
     client = get_ai_client()
     try:
@@ -132,13 +133,8 @@ def ai_chat(body: ChatRequest, session: str = Cookie(default="")):
 
     ai_message = parsed.get("message", "")
     actions = parsed.get("actions", [])
-
-    action_results = []
-    if actions:
-        action_results = apply_actions(actions, board_id)
-
-    # Return updated board state
-    updated_board = get_board(session)
+    action_results = apply_actions(actions, board_id) if actions else []
+    updated_board = get_default_board(session)
 
     return {
         "message": ai_message,

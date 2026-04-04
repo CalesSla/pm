@@ -38,6 +38,17 @@
         { "name": "created_at", "type": "TEXT", "constraints": "NOT NULL DEFAULT (datetime('now'))" }
       ]
     }
+    {
+      "name": "checklist_items",
+      "columns": [
+        { "name": "id", "type": "INTEGER", "constraints": "PRIMARY KEY AUTOINCREMENT" },
+        { "name": "card_id", "type": "INTEGER", "constraints": "NOT NULL REFERENCES cards(id) ON DELETE CASCADE" },
+        { "name": "title", "type": "TEXT", "constraints": "NOT NULL" },
+        { "name": "checked", "type": "INTEGER", "constraints": "NOT NULL DEFAULT 0" },
+        { "name": "position", "type": "INTEGER", "constraints": "NOT NULL" },
+        { "name": "created_at", "type": "TEXT", "constraints": "NOT NULL DEFAULT (datetime('now'))" }
+      ]
+    }
   ],
   "pragmas": [
     "PRAGMA journal_mode=WAL",

@@ -1,7 +1,43 @@
+export type Label = {
+  id: number;
+  name: string;
+  color: string;
+};
+
+export type BoardMember = {
+  id: number;
+  username: string;
+  display_name: string;
+  role: "owner" | "member" | "admin";
+};
+
+export type Comment = {
+  id: number;
+  content: string;
+  created_at: string | null;
+  user: { id: number; username: string; display_name: string };
+};
+
+export type Priority = "none" | "low" | "medium" | "high" | "urgent";
+
+export type ChecklistItem = {
+  id: number;
+  title: string;
+  checked: boolean;
+  position: number;
+};
+
 export type Card = {
   id: string;
   title: string;
   details: string;
+  due_date: string | null;
+  priority: Priority;
+  labels: Label[];
+  comment_count: number;
+  checklist_total: number;
+  checklist_done: number;
+  assignees: BoardMember[];
 };
 
 export type Column = {
@@ -13,72 +49,20 @@ export type Column = {
 export type BoardData = {
   columns: Column[];
   cards: Record<string, Card>;
+  labels: Label[];
+  members: BoardMember[];
 };
 
-export const initialData: BoardData = {
-  columns: [
-    { id: "col-backlog", title: "Backlog", cardIds: ["card-1", "card-2"] },
-    { id: "col-discovery", title: "Discovery", cardIds: ["card-3"] },
-    {
-      id: "col-progress",
-      title: "In Progress",
-      cardIds: ["card-4", "card-5"],
-    },
-    { id: "col-review", title: "Review", cardIds: ["card-6"] },
-    { id: "col-done", title: "Done", cardIds: ["card-7", "card-8"] },
-  ],
-  cards: {
-    "card-1": {
-      id: "card-1",
-      title: "Align roadmap themes",
-      details: "Draft quarterly themes with impact statements and metrics.",
-    },
-    "card-2": {
-      id: "card-2",
-      title: "Gather customer signals",
-      details: "Review support tags, sales notes, and churn feedback.",
-    },
-    "card-3": {
-      id: "card-3",
-      title: "Prototype analytics view",
-      details: "Sketch initial dashboard layout and key drill-downs.",
-    },
-    "card-4": {
-      id: "card-4",
-      title: "Refine status language",
-      details: "Standardize column labels and tone across the board.",
-    },
-    "card-5": {
-      id: "card-5",
-      title: "Design card layout",
-      details: "Add hierarchy and spacing for scanning dense lists.",
-    },
-    "card-6": {
-      id: "card-6",
-      title: "QA micro-interactions",
-      details: "Verify hover, focus, and loading states.",
-    },
-    "card-7": {
-      id: "card-7",
-      title: "Ship marketing page",
-      details: "Final copy approved and asset pack delivered.",
-    },
-    "card-8": {
-      id: "card-8",
-      title: "Close onboarding sprint",
-      details: "Document release notes and share internally.",
-    },
-  },
+export type BoardSummary = {
+  id: number;
+  title: string;
+  created_at: string;
+  role?: string;
 };
 
-const isColumnId = (columns: Column[], id: string) =>
-  columns.some((column) => column.id === id);
-
-const findColumnId = (columns: Column[], id: string) => {
-  if (isColumnId(columns, id)) {
-    return id;
-  }
-  return columns.find((column) => column.cardIds.includes(id))?.id;
+const findColumnId = (columns: Column[], id: string): string | undefined => {
+  if (columns.some((col) => col.id === id)) return id;
+  return columns.find((col) => col.cardIds.includes(id))?.id;
 };
 
 export const moveCard = (
@@ -100,7 +84,7 @@ export const moveCard = (
     return columns;
   }
 
-  const isOverColumn = isColumnId(columns, overId);
+  const isOverColumn = columns.some((col) => col.id === overId);
 
   if (activeColumnId === overColumnId) {
     if (isOverColumn) {

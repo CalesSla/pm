@@ -14,29 +14,86 @@ PRAGMA foreign_keys=ON;
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
+    display_name TEXT NOT NULL DEFAULT '',
     password_hash TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS boards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL REFERENCES users(id),
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     title TEXT NOT NULL DEFAULT 'My Board',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS columns_ (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    board_id INTEGER NOT NULL REFERENCES boards(id),
+    board_id INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     position INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS cards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    column_id INTEGER NOT NULL REFERENCES columns_(id),
+    column_id INTEGER NOT NULL REFERENCES columns_(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     details TEXT NOT NULL DEFAULT '',
+    position INTEGER NOT NULL,
+    due_date TEXT DEFAULT NULL,
+    priority TEXT NOT NULL DEFAULT 'none',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS labels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    board_id INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT '#6b7280'
+);
+
+CREATE TABLE IF NOT EXISTS card_labels (
+    card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+    label_id INTEGER NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
+    PRIMARY KEY (card_id, label_id)
+);
+
+CREATE TABLE IF NOT EXISTS comments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS board_members (
+    board_id INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL DEFAULT 'member',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (board_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS card_assignments (
+    card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (card_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS activity_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    board_id INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    card_id INTEGER REFERENCES cards(id) ON DELETE SET NULL,
+    action TEXT NOT NULL,
+    detail TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS checklist_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    checked INTEGER NOT NULL DEFAULT 0,
     position INTEGER NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -73,6 +130,20 @@ def get_db():
         conn.close()
 
 
+def create_board_with_columns(conn: sqlite3.Connection, user_id: int, title: str = "My Board") -> int:
+    """Create a board with default columns. Returns the board id."""
+    conn.execute("INSERT INTO boards (user_id, title) VALUES (?, ?)", (user_id, title))
+    conn.commit()
+    board_id = conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
+    for pos, col_title in enumerate(DEFAULT_COLUMNS):
+        conn.execute(
+            "INSERT INTO columns_ (board_id, title, position) VALUES (?, ?, ?)",
+            (board_id, col_title, pos),
+        )
+    conn.commit()
+    return board_id
+
+
 def init_db():
     with get_db() as conn:
         conn.executescript(SCHEMA_SQL)
@@ -83,23 +154,15 @@ def init_db():
             conn.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", ("user", pw_hash))
             conn.commit()
 
-            user_id = conn.execute("SELECT id FROM users WHERE username = ?", ("user",)).fetchone()["id"]
-            conn.execute("INSERT INTO boards (user_id, title) VALUES (?, ?)", (user_id, "My Board"))
-            conn.commit()
+            user_id = conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
+            board_id = create_board_with_columns(conn, user_id, "My Board")
 
-            board_id = conn.execute("SELECT id FROM boards WHERE user_id = ?", (user_id,)).fetchone()["id"]
-            column_ids = []
-            for pos, title in enumerate(DEFAULT_COLUMNS):
-                conn.execute(
-                    "INSERT INTO columns_ (board_id, title, position) VALUES (?, ?, ?)",
-                    (board_id, title, pos),
-                )
-                conn.commit()
-                col_id = conn.execute(
-                    "SELECT id FROM columns_ WHERE board_id = ? AND position = ?",
-                    (board_id, pos),
-                ).fetchone()["id"]
-                column_ids.append(col_id)
+            column_ids = [
+                row["id"]
+                for row in conn.execute(
+                    "SELECT id FROM columns_ WHERE board_id = ? ORDER BY position", (board_id,)
+                ).fetchall()
+            ]
 
             for col_idx, title, details in SEED_CARDS:
                 card_pos = conn.execute(

@@ -1,11 +1,26 @@
 import { render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { KanbanBoard } from "@/components/KanbanBoard";
-import { initialData } from "@/lib/kanban";
 
 const mockBoardResponse = {
-  columns: initialData.columns,
-  cards: initialData.cards,
+  columns: [
+    { id: "col-1", title: "Backlog", cardIds: ["card-1", "card-2"] },
+    { id: "col-2", title: "Discovery", cardIds: ["card-3"] },
+    { id: "col-3", title: "In Progress", cardIds: ["card-4", "card-5"] },
+    { id: "col-4", title: "Review", cardIds: ["card-6"] },
+    { id: "col-5", title: "Done", cardIds: ["card-7", "card-8"] },
+  ],
+  cards: {
+    "card-1": { id: "card-1", title: "Align roadmap themes", details: "Draft quarterly themes.", due_date: null, priority: "none", labels: [], comment_count: 0, checklist_total: 0, checklist_done: 0, assignees: [] },
+    "card-2": { id: "card-2", title: "Gather customer signals", details: "Review support tags.", due_date: null, priority: "none", labels: [], comment_count: 0, checklist_total: 0, checklist_done: 0, assignees: [] },
+    "card-3": { id: "card-3", title: "Prototype analytics view", details: "Sketch initial dashboard.", due_date: null, priority: "none", labels: [], comment_count: 0, checklist_total: 0, checklist_done: 0, assignees: [] },
+    "card-4": { id: "card-4", title: "Refine status language", details: "Standardize labels.", due_date: null, priority: "none", labels: [], comment_count: 0, checklist_total: 0, checklist_done: 0, assignees: [] },
+    "card-5": { id: "card-5", title: "Design card layout", details: "Add hierarchy.", due_date: null, priority: "none", labels: [], comment_count: 0, checklist_total: 0, checklist_done: 0, assignees: [] },
+    "card-6": { id: "card-6", title: "QA micro-interactions", details: "Verify states.", due_date: null, priority: "none", labels: [], comment_count: 0, checklist_total: 0, checklist_done: 0, assignees: [] },
+    "card-7": { id: "card-7", title: "Ship marketing page", details: "Final copy.", due_date: null, priority: "none", labels: [], comment_count: 0, checklist_total: 0, checklist_done: 0, assignees: [] },
+    "card-8": { id: "card-8", title: "Close onboarding sprint", details: "Document notes.", due_date: null, priority: "none", labels: [], comment_count: 0, checklist_total: 0, checklist_done: 0, assignees: [] },
+  },
+  labels: [],
 };
 
 let cardIdCounter = 100;
@@ -19,7 +34,11 @@ beforeEach(() => {
     if (url === "/api/cards" && options?.method === "POST") {
       const body = JSON.parse(options.body as string);
       const id = String(++cardIdCounter);
-      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ id, title: body.title, details: body.details || "" }) });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ id, title: body.title, details: body.details || "", due_date: null }),
+      });
     }
     // Default: success for PUT/DELETE
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true }) });
